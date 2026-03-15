@@ -33,6 +33,17 @@ def slack_events():
     
     return jsonify({"ok": True}), 200
 
+# --- ここから付け足し ---
+@app.route("/slack/events", methods=["POST"])
+def slack_events():
+    # Slackから届く「challenge」という合図に、そのまま中身を返してあげる処理
+    if request.is_json and request.json.get("type") == "url_verification":
+        return request.json.get("challenge")
+    
+    # ここに、後でメッセージを受け取った時の処理などを書けます
+    return "OK", 200
+# --- ここまで付け足し ---
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 3000))
     app.run(host="0.0.0.0", port=port)
