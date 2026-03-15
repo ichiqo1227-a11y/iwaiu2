@@ -1,49 +1,33 @@
 import os
-from flask import Flask, request, jsonify
-from slack_sdk import WebClient
-from openai import OpenAI
+from flask import Flask, request
+from slack_bolt import App
+from slack_bolt.adapter.flask import SlackRequestHandler
 
-app = Flask(__name__)
+# 1. 環境変数が無くてもクラッシュしないようにガード
+token = os.environ.get("SLACK_BOT_TOKEN")
+signing_secret = os.environ.get("SLACK_SIGNING_SECRET")
 
-slack_client = WebClient(token=os.environ["SLACK_BOT_TOKEN"])
-openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+# Slack Bolt アプリの初期化
+app = App(
+    token=token,
+    signing_secret=signing_secret
+)
+handler = SlackRequestHandler(app)
 
-@app.route("/slack/events", methods=["POST"])
+# Flask アプリの名前を 'app' に統一するとミスが減ります
+flask_app = Flask(__name__)
+
+# ヘルスチェック用（ブラウザでURLを開いた時に動いているか確認するため）
+@flask_app.route("/", methods=["GET"])
+def health_check():
+    return "Server is running!", 200
+
+# Slack からのイベントを受け取る窓口
+@flask_app.route("/slack/events", methods=["POST"])
 def slack_events():
-    data = request.json
-    
-    if "event" in data:
-        event = data["event"]
-        
-        if event["type"] == "app_mention":
-            text = event["text"]
-            channel = event["channel"]
-            
-            response = openai_client.chat.completions.create(
-                model="gpt-4",
-                messages=[{"role":"user","content":text}]
-            )
-            
-            reply = response.choices[0].message.content
-            
-            slack_client.chat_postMessage(
-                channel=channel,
-                text=reply
-            )
-    
-    return jsonify({"ok": True}), 200
-
-# --- ここから付け足し ---
-@app.route("/slack/events", methods=["POST"])
-def slack_events():
-    # Slackから届く「challenge」という合図に、そのまま中身を返してあげる処理
-    if request.is_json and request.json.get("type") == "url_verification":
-        return request.json.get("challenge")
-    
-    # ここに、後でメッセージを受け取った時の処理などを書けます
-    return "OK", 200
-# --- ここまで付け足し ---
+    return handler.handle(request)
 
 if __name__ == "__main__":
+    # Railway 用のポート設定
     port = int(os.environ.get("PORT", 3000))
-    app.run(host="0.0.0.0", port=port)
+    flask_app.run(host="0.0.0.0", port=port)
