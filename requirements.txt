@@ -1,4 +1,3 @@
-openai
 slack-bolt
 Flask
 gunicorn
